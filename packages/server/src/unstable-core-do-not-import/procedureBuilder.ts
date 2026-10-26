@@ -13,7 +13,12 @@ import {
   createOutputMiddleware,
   middlewareMarker,
 } from './middleware';
-import type { inferParser, Parser } from './parser';
+import type {
+  inferParser,
+  OutputParser,
+  Parser,
+  ParserCustomValidatorEsque,
+} from './parser';
 import { getParseFn } from './parser';
 import type {
   AnyMutationProcedure,
@@ -77,7 +82,7 @@ export type CallerOverride<TContext> = (opts: {
 type ProcedureBuilderDef<TMeta> = {
   procedure: true;
   inputs: Parser[];
-  output?: Parser;
+  output?: OutputParser;
   meta?: TMeta;
   resolver?: ProcedureBuilderResolver;
   middlewares: AnyMiddlewareFunction[];
@@ -253,6 +258,20 @@ export interface ProcedureBuilder<
     TInputOut,
     IntersectIfDefined<TOutputIn, inferParser<$Parser>['in']>,
     IntersectIfDefined<TOutputOut, inferParser<$Parser>['out']>,
+    TCaller,
+    TErrorShape
+  >;
+  // Keep the schema overload first so unannotated validators receive unknown.
+  output<$Input, $Output>(
+    schema: ParserCustomValidatorEsque<$Output, $Input>,
+  ): ProcedureBuilder<
+    TContext,
+    TMeta,
+    TContextOverrides,
+    TInputIn,
+    TInputOut,
+    IntersectIfDefined<TOutputIn, $Input>,
+    IntersectIfDefined<TOutputOut, $Output>,
     TCaller,
     TErrorShape
   >;
@@ -567,7 +586,7 @@ export function createBuilder<TContext, TMeta, TErrorShape = unknown>(
         middlewares: [createInputMiddleware(parser)],
       });
     },
-    output(output: Parser) {
+    output(output: OutputParser) {
       const parser = getParseFn(output);
       return createNewBuilder(_def, {
         output,

@@ -34,8 +34,8 @@ export type ParserSuperstructEsque<TInput> = {
   create: (input: unknown) => TInput;
 };
 
-export type ParserCustomValidatorEsque<TInput> = (
-  input: unknown,
+export type ParserCustomValidatorEsque<TInput, TRawInput = unknown> = (
+  input: TRawInput,
 ) => Promise<TInput> | TInput;
 
 export type ParserYupEsque<TInput> = {
@@ -61,6 +61,8 @@ export type ParserWithInputOutput<TInput, TParsedInput> =
 
 export type Parser = ParserWithInputOutput<any, any> | ParserWithoutInput<any>;
 
+export type OutputParser = Parser | ParserCustomValidatorEsque<any, any>;
+
 export type inferParser<TParser extends Parser> =
   TParser extends ParserStandardSchemaEsque<infer $TIn, infer $TOut>
     ? {
@@ -81,7 +83,9 @@ export type inferParser<TParser extends Parser> =
 
 export type ParseFn<TType> = (value: unknown) => Promise<TType> | TType;
 
-export function getParseFn<TType>(procedureParser: Parser): ParseFn<TType> {
+export function getParseFn<TType>(
+  procedureParser: OutputParser,
+): ParseFn<TType> {
   const parser = procedureParser as any;
   const isStandardSchema = '~standard' in parser;
 

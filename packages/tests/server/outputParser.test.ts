@@ -455,3 +455,68 @@ test('async validator fn', async () => {
     `[TRPCClientError: Output validation failed]`,
   );
 });
+
+test.each(['encode', 'encodeAsync'] as const)(
+  'typed output function: Zod codec %s',
+  async (method) => {
+    const trpc = initTRPC.create();
+    const schema = z.object({
+      value: z.codec(z.string(), z.bigint().nonnegative(), {
+        decode: (value) => BigInt(value),
+        encode: (value) => value.toString(),
+      }),
+    });
+    // Zod's encode methods close over the schema and do not use `this`.
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const procedure = trpc.procedure.output(schema[method]);
+    const router = trpc.router({
+      q: procedure.input(z.boolean()).query((opts) => ({
+        value: opts.input ? 123n : -1n,
+      })),
+    });
+
+    // @ts-expect-error the resolver must return the encoder's input, not its output
+    procedure.query(() => ({ value: '123' }));
+
+    await using ctx = testServerAndClientResource(router);
+    const output = await ctx.client.q.query(true);
+    expectTypeOf(output).toEqualTypeOf<{ value: string }>();
+    expect(output).toEqual({ value: '123' });
+
+    await expect(ctx.client.q.query(false)).rejects.toThrow(
+      'Output validation failed',
+    );
+  },
+);
+
+test('custom validator functions preserve unknown input inference', async () => {
+  const trpc = initTRPC.create();
+  const procedure = trpc.procedure
+    .input((value) => {
+      expectTypeOf(value).toBeUnknown();
+      if (typeof value !== 'string') {
+        throw new Error('Expected a string');
+      }
+      return value;
+    })
+    .output((value) => {
+      expectTypeOf(value).toBeUnknown();
+      if (typeof value !== 'string') {
+        throw new Error('Expected a string');
+      }
+      return value;
+    });
+
+  // @ts-expect-error unknown-input validators still require their inferred output
+  procedure.query(() => 123);
+
+  const router = trpc.router({
+    q: procedure.query((opts) => {
+      expectTypeOf(opts.input).toBeString();
+      return opts.input;
+    }),
+  });
+  await using ctx = testServerAndClientResource(router);
+  expectTypeOf(ctx.client.q.query).parameter(0).toBeString();
+  expect(await ctx.client.q.query('hello')).toBe('hello');
+});

@@ -166,6 +166,31 @@ export const appRouter = t.router({
 export type AppRouter = typeof appRouter;
 ```
 
+### Typed output functions
+
+An output function can declare the type it accepts. The resolver must return that type, and the client receives the function's return type. Async output functions are also supported.
+
+For example, pass a Zod codec's `encode` or `encodeAsync` method to serialize a value returned by the resolver:
+
+```ts twoslash
+// @target: esnext
+import { initTRPC } from '@trpc/server';
+import { z } from 'zod';
+
+const t = initTRPC.create();
+const stringToBigInt = z.codec(z.string(), z.bigint(), {
+  decode: (value) => BigInt(value),
+  encode: (value) => value.toString(),
+});
+
+export const appRouter = t.router({
+  count: t.procedure.output(stringToBigInt.encode).query(() => 123n),
+});
+// The resolver returns a bigint; the client receives a string.
+```
+
+Functions whose parameter is `unknown` retain the usual validator behavior: the resolver's return type must match the validated output type. Passing a schema directly to `.output()` continues to use its parse direction.
+
 ## Library integrations
 
 tRPC works out of the box with a number of popular validation and parsing libraries, including any library conforming to [Standard Schema](https://standardschema.dev). The below are some examples of usage with validators which we officially maintain support for.
